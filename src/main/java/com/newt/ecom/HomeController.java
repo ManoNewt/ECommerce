@@ -24,6 +24,7 @@ import org.springframework.web.servlet.ModelAndView;
 import com.newt.ecom.bean.ProductCheckoutDetails;
 import com.newt.ecom.bean.ProductList;
 import com.newt.ecom.bean.ShoppingBean;
+import com.newt.ecom.commonutils.Productstatus;
 import com.newt.ecom.model.Customer;
 import com.newt.ecom.model.Product;
 import com.newt.ecom.model.ShoppingCartItems;
@@ -56,7 +57,7 @@ public class HomeController {
 	}
 	
 	@RequestMapping(value = "/register", method = RequestMethod.POST)
-	public ModelAndView registerCustomer(@ModelAttribute("customer") Customer customer, 
+	public ModelAndView registerCustomer(@ModelAttribute("customer") Customer customer,@ModelAttribute("shoppingBean") ShoppingBean shoppingBean, 
 			BindingResult result) {
 		
 		customer.setCustomerName(customer.getFirstName()+""+customer.getLastName());
@@ -66,7 +67,7 @@ public class HomeController {
 		logger.info("Customer Info ====>"+customer.toString());
 		
 		ModelAndView modelAndView=new ModelAndView("loginPage");
-		final String restURI = "http://52.207.22.180:8763/customer/add";		
+		final String restURI = "http://52.207.17.79:8767/customer/add";		
 		RestTemplate restTemplate = new RestTemplate();
 		restTemplate.getMessageConverters().add(new MappingJacksonHttpMessageConverter());
 		restTemplate.getMessageConverters().add(new StringHttpMessageConverter());
@@ -74,6 +75,8 @@ public class HomeController {
 		Customer cust1 = restTemplate.postForObject( restURI, customer, Customer.class);
 		if(cust1 != null){
 			modelAndView.addObject("successMsg", "Customer registred successfuly");
+			shoppingBean.setProductList(getProductList());
+			modelAndView.addObject("productList",shoppingBean.getProductList());
 		}		
 		return modelAndView;
 	}
@@ -104,7 +107,7 @@ public class HomeController {
     		
     	}else{
 
-	        final String restURI = "http://52.207.22.180:8763/customer/login/"+customer.getUsername();	
+	        final String restURI = "http://52.207.17.79:8767/customer/login/"+customer.getUsername();	
 	        RestTemplate restTemplate = new RestTemplate();
 	        Customer customerDetails = restTemplate.getForObject( restURI, Customer.class);
 	        if(customerDetails != null){
@@ -215,12 +218,13 @@ public class HomeController {
 			ProductList productList = new ProductList();
 			productList.setCustomerId(shoppingBean.getCustomerId());
 			productList.setProductId(shoppingCartList.getProductId());
-			productList.setProductName(shoppingCartList.getProductName());	
+			productList.setProductName(shoppingCartList.getProductName());
+			productList.setProductStatus(Productstatus.SHIPPED);
 			lists.add(productList);
 		}
 		productCheckout.setProductList(lists);
 		logger.info("productCheckout==>"+productCheckout.toString());
-		final String restURI = "http://52.207.22.180:8764/checkout/addCheckoutDetails/";		
+		final String restURI = "http://52.207.177.148:8764/checkout/addCheckoutDetails/";		
 		RestTemplate restTemplate = new RestTemplate();
 		restTemplate.getMessageConverters().add(new MappingJacksonHttpMessageConverter());
 		restTemplate.getMessageConverters().add(new StringHttpMessageConverter());

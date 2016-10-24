@@ -1,5 +1,6 @@
 package com.newt.ecom.bean;
 
+import com.newt.ecom.commonutils.Productstatus;
 
 public class ProductList {
 
@@ -12,6 +13,10 @@ public class ProductList {
 	 private long customerId;
 	
 	 private int checkoutOrderId;
+	 
+	 private int shoppingcartId;
+	 
+	 private Productstatus productStatus;
 	
 	 public int getProductcheckoutId() {
 	  return productcheckoutId;
@@ -53,11 +58,26 @@ public class ProductList {
 	  this.checkoutOrderId = checkoutOrderId;
 	 }
 
+	public Productstatus getProductStatus() {
+		return productStatus;
+	}
+
+	public void setProductStatus(Productstatus productStatus) {
+		this.productStatus = productStatus;
+	}
+
+	public int getShoppingcartId() {
+		return shoppingcartId;
+	}
+
+	public void setShoppingcartId(int shoppingcartId) {
+		this.shoppingcartId = shoppingcartId;
+	}
+
 	@Override
 	public String toString() {
 		return "ProductList [productcheckoutId=" + productcheckoutId + ", productId=" + productId + ", productName="
-				+ productName + ", customerId=" + customerId + ", checkoutOrderId=" + checkoutOrderId + "]";
+				+ productName + ", customerId=" + customerId + ", checkoutOrderId=" + checkoutOrderId
+				+ ", shoppingcartId=" + shoppingcartId + ", productStatus=" + productStatus + "]";
 	}
-	
-
 }

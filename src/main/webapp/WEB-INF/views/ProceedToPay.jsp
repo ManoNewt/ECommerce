@@ -37,6 +37,7 @@
                         <td id="productPrice"><input  name="shoppingCartItems[${index.index }].price" value="${cartItem.price}"/></td>
                         <td><input  name="shoppingCartItems[${index.index }].productDesc" value="${cartItem.productDesc}"/></td>                      
                   		<td align="center"><input type="hidden"name="shoppingCartItems[${index.index }].productId" value="${cartItem.productId}"/></td>
+                  		<td align="center"><input type="hidden"name="shoppingCartItems[${index.index }].shoppingcartId" value="${cartItem.shoppingcartId}"/></td>               
                   </tr>
                  </c:forEach>
                  
