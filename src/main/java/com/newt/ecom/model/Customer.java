@@ -190,5 +190,14 @@ public class Customer {
 	public void setPassword(String password) {
 		this.password = password;
 	}
+
+	@Override
+	public String toString() {
+		return "Customer [customerId=" + customerId + ", customerName=" + customerName + ", customerEmail="
+				+ customerEmail + ", address1=" + address1 + ", address2=" + address2 + ", city=" + city + ", state="
+				+ state + ", country=" + country + ", pincode=" + pincode + ", firstName=" + firstName + ", lastName="
+				+ lastName + ", age=" + age + ", gender=" + gender + ", dob=" + dob + ", phone=" + phone + ", status="
+				+ status + ", username=" + username + ", password=" + password + "]";
+	}
 	
 }

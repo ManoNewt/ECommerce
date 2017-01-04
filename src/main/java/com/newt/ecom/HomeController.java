@@ -1,15 +1,29 @@
 package com.newt.ecom;
 
+
+
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
+import org.apache.commons.codec.binary.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.http.converter.json.MappingJacksonHttpMessageConverter;
 import org.springframework.stereotype.Controller;
+import org.springframework.util.Assert;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,13 +32,19 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.SessionAttributes;
 import org.springframework.web.bind.support.SessionStatus;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.ModelAndView;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.newt.ecom.bean.ProductCheckoutDetails;
 import com.newt.ecom.bean.ProductList;
 import com.newt.ecom.bean.ShoppingBean;
+import com.newt.ecom.commonutils.EcomConstants;
 import com.newt.ecom.commonutils.Productstatus;
+import com.newt.ecom.model.AuthTokenInfo;
 import com.newt.ecom.model.Customer;
 import com.newt.ecom.model.Product;
 import com.newt.ecom.model.ShoppingCartItems;
@@ -58,7 +78,7 @@ public class HomeController {
 	
 	@RequestMapping(value = "/register", method = RequestMethod.POST)
 	public ModelAndView registerCustomer(@ModelAttribute("customer") Customer customer,@ModelAttribute("shoppingBean") ShoppingBean shoppingBean, 
-			BindingResult result) {
+			BindingResult result) throws JsonParseException, JsonMappingException, IOException {
 		
 		customer.setCustomerName(customer.getFirstName()+""+customer.getLastName());
 		customer.setUsername(customer.getCustomerEmail());
@@ -71,18 +91,67 @@ public class HomeController {
 		RestTemplate restTemplate = new RestTemplate();
 		restTemplate.getMessageConverters().add(new MappingJacksonHttpMessageConverter());
 		restTemplate.getMessageConverters().add(new StringHttpMessageConverter());
+		ObjectMapper obj = new ObjectMapper();
+		Map<?, ?> results = null;
+		try{
+			AuthTokenInfo tokenInfo = sendTokenRequest();
+			 Assert.notNull(tokenInfo, "Authenticate first please......");
+			 HttpEntity<Object> request = new HttpEntity<Object>(customer,getHeaders());
+			 ResponseEntity<Map> responseEntity = restTemplate.exchange(restURI+EcomConstants.QPM_ACCESS_TOKEN+tokenInfo.getAccess_token(),
+	        		HttpMethod.POST, request, Map.class);
+			//ResponseEntity responseEntity = restTemplate.postForEntity(restURI, customer, Map.class);
+			Customer customerDetails = null;
+			if(responseEntity.getStatusCode().equals(HttpStatus.OK)){
+				 results = (Map<?, ?>) responseEntity.getBody();
+				 if(results.get("ErrorMsg") != null){
+		    	     modelAndView.addObject("errorMsg", results.get("ErrorMsg"));
+		    	     return modelAndView;	 
+				 }else if(results.get("customerDetails") != null){
+					 customerDetails = obj.convertValue(results.get("customerDetails"), Customer.class);
+					 if(customerDetails != null){
+							modelAndView.addObject("successMsg", "Customer registred successfuly");
+							shoppingBean.setProductList(getProductList());
+							modelAndView.addObject("productList",shoppingBean.getProductList());
+							return modelAndView;
+					 }	
+				 }
+			}
+		}catch(HttpClientErrorException ex){
+			if(ex.getStatusCode().equals(HttpStatus.BAD_REQUEST)){
+				results = obj.readValue(ex.getResponseBodyAsString(), Map.class); 
+				if(results.get("ErrorMsg") != null){
+		    	     modelAndView.addObject("errorMsg", results.get("ErrorMsg"));
+		    	     return modelAndView;
+				 }else{
+		    	     modelAndView.addObject("errorMsg", "Authentication Failed");
+		    	     return modelAndView;
+				 }
+			}
+			if(ex.getStatusCode().equals(HttpStatus.EXPECTATION_FAILED)){
+				results = obj.readValue(ex.getResponseBodyAsString(), Map.class); 
+				if(results.get("ErrorMsg") != null){
+		    	     modelAndView.addObject("errorMsg", results.get("ErrorMsg"));
+		    	     return modelAndView;
+				 }
+			}if(ex.getStatusCode().equals(HttpStatus.FORBIDDEN)){
+	    	     modelAndView.addObject("errorMsg", "Deny access for the requested resources!");
+	    	     return modelAndView;
+			}
+			if(ex.getStatusCode().equals(HttpStatus.UNAUTHORIZED)){
+				 modelAndView=new ModelAndView("unauthorized");
+	    	     return modelAndView;
+			}
+		}catch(Exception ex){
+			 modelAndView=new ModelAndView("invalidLogin");
+   	     modelAndView.addObject("errorMsg", "Internal server exception");
+   	     return modelAndView;
+		}
 		
-		Customer cust1 = restTemplate.postForObject( restURI, customer, Customer.class);
-		if(cust1 != null){
-			modelAndView.addObject("successMsg", "Customer registred successfuly");
-			shoppingBean.setProductList(getProductList());
-			modelAndView.addObject("productList",shoppingBean.getProductList());
-		}		
 		return modelAndView;
 	}
 	
 	@RequestMapping(value = "/login", method = RequestMethod.POST)
-	public ModelAndView loginCustomer(@ModelAttribute("customer") Customer customer, @ModelAttribute("shoppingBean") ShoppingBean shoppingBean) {
+	public ModelAndView loginCustomer(@ModelAttribute("customer") Customer customer, @ModelAttribute("shoppingBean") ShoppingBean shoppingBean) throws JsonParseException, JsonMappingException, IOException {
         ModelAndView modelAndView;
       //Validation
         logger.info("Customer Info====>"+customer.getUsername());
@@ -106,32 +175,87 @@ public class HomeController {
     		}
     		
     	}else{
-
-	        final String restURI = "http://52.207.17.79:8767/customer/login/"+customer.getUsername();	
-	        RestTemplate restTemplate = new RestTemplate();
-	        Customer customerDetails = restTemplate.getForObject( restURI, Customer.class);
-	        if(customerDetails != null){
-	        	if(!customerDetails.getPassword().equals(customer.getPassword())){
-	        		 modelAndView=new ModelAndView("invalidLogin");
-		    	     modelAndView.addObject("errorMsg", "Invalid password try again!!");
+    		List<Customer> customerList = null;
+    		Customer customerDetails= null;
+    		 Map<?, ?> result = null;
+			 ObjectMapper obj = new ObjectMapper();
+		     RestTemplate restTemplate = new RestTemplate();
+    		try{
+		        final String restURI = "http://52.207.17.79:8767/customer/login/"+customer.getUsername();	
+		       AuthTokenInfo tokenInfo = sendTokenRequest();
+		    	Assert.notNull(tokenInfo, "Authenticate first please......");
+		        HttpEntity<String> request = new HttpEntity<String>(getHeaders());
+		        ResponseEntity<Map> responseEntity = restTemplate.exchange(restURI+EcomConstants.QPM_ACCESS_TOKEN+tokenInfo.getAccess_token(),
+		        		HttpMethod.GET, request, Map.class);
+		        //ResponseEntity<Map> responseEntity = restTemplate.getForEntity(restURI, Map.class);
+				if(responseEntity.getStatusCode().equals(HttpStatus.OK)){
+					 result = (Map<?, ?>) responseEntity.getBody();
+					 if(result.get("ErrorMsg") != null){
+						 modelAndView=new ModelAndView("invalidLogin");
+			    	     modelAndView.addObject("errorMsg", result.get("ErrorMsg"));
+			    	     return modelAndView;	 
+					 }else if(result.get("customerDetails") != null){
+						 customerDetails = obj.convertValue(result.get("customerDetails"), Customer.class);
+					 }
+		        if(customerDetails != null){
+		        	if(!customerDetails.getPassword().equals(customer.getPassword())){
+		        		 modelAndView=new ModelAndView("invalidLogin");
+			    	     modelAndView.addObject("errorMsg", "Invalid password try again!!");
+			    	     return modelAndView;	
+		        	}
+		        	modelAndView=new ModelAndView("productCatalog");
+		        	shoppingBean.setProductList(getProductList());
+		 			modelAndView.addObject("productList",shoppingBean.getProductList());
+				    modelAndView.addObject("loggedInProfile", customerDetails);
+		        	shoppingBean.setCustomerId(customerDetails.getCustomerId());
+		    		shoppingBean.setCustomerName(customerDetails.getCustomerName());
+		    		shoppingBean.setCustomerEmail(customerDetails.getCustomerEmail());
+		    		modelAndView.addObject("shoppingBean", shoppingBean);
+		    		return modelAndView;	
+		        	
+		        	
+		        }else{
+		        	 modelAndView=new ModelAndView("invalidLogin");
+		    	     modelAndView.addObject("errorMsg", "Invalid Credantials");
 		    	     return modelAndView;	
-	        	}
-	        	modelAndView=new ModelAndView("productCatalog");
-	        	shoppingBean.setProductList(getProductList());
-	 			modelAndView.addObject("productList",shoppingBean.getProductList());
-			    modelAndView.addObject("loggedInProfile", customerDetails);
-	        	shoppingBean.setCustomerId(customerDetails.getCustomerId());
-	    		shoppingBean.setCustomerName(customerDetails.getCustomerName());
-	    		shoppingBean.setCustomerEmail(customerDetails.getCustomerEmail());
-	    		modelAndView.addObject("shoppingBean", shoppingBean);
-	    		return modelAndView;	
-	        	
-	        	
-	        }else{
-	        	 modelAndView=new ModelAndView("invalidLogin");
-	    	     modelAndView.addObject("errorMsg", "Invalid Credantials");
-	    	     return modelAndView;	
-	        }
+		        }
+			 }
+    	}catch(HttpClientErrorException ex){
+			if(ex.getStatusCode().equals(HttpStatus.BAD_REQUEST)){
+				result = obj.readValue(ex.getResponseBodyAsString(), Map.class); 
+				if(result.get("ErrorMsg") != null){
+					 modelAndView=new ModelAndView("invalidLogin");
+		    	     modelAndView.addObject("errorMsg", result.get("ErrorMsg"));
+		    	     return modelAndView;
+				 }else{
+					 modelAndView=new ModelAndView("invalidLogin");
+		    	     modelAndView.addObject("errorMsg", "Authentication Failed");
+		    	     return modelAndView;
+				 }
+			}
+			if(ex.getStatusCode().equals(HttpStatus.EXPECTATION_FAILED)){
+				result = obj.readValue(ex.getResponseBodyAsString(), Map.class); 
+				if(result.get("ErrorMsg") != null){
+					 modelAndView=new ModelAndView("invalidLogin");
+		    	     modelAndView.addObject("errorMsg", result.get("ErrorMsg"));
+		    	     return modelAndView;
+				 }
+			}
+			if(ex.getStatusCode().equals(HttpStatus.UNAUTHORIZED)){
+				 modelAndView=new ModelAndView("unauthorized");
+	    	     return modelAndView;
+			}
+			if(ex.getStatusCode().equals(HttpStatus.FORBIDDEN)){
+				 modelAndView=new ModelAndView("invalidLogin");
+	    	     modelAndView.addObject("errorMsg", "Deny access for the requested resources!");
+	    	     return modelAndView;
+			}
+		}catch(Exception ex){
+			 modelAndView=new ModelAndView("invalidLogin");
+    	     modelAndView.addObject("errorMsg", "Internal server exception"+ex);
+    	     return modelAndView;
+		}
+    		
     	}
     	
    	 modelAndView=new ModelAndView("invalidLogin");
@@ -201,7 +325,7 @@ public class HomeController {
 	public ModelAndView makePayment(@ModelAttribute("shoppingBean") ShoppingBean shoppingBean, 
 			BindingResult result) {
 		ModelAndView modelAndView=new ModelAndView("orderCreated");
-		System.out.println("=====>***"+shoppingBean.toString());
+		logger.info("=====>***"+shoppingBean.toString());
 		ProductCheckoutDetails productCheckout = new ProductCheckoutDetails();
 		productCheckout.setCustomerId(shoppingBean.getCustomerId());
 		productCheckout.setCustomerName(shoppingBean.getCustomerName());
@@ -220,6 +344,7 @@ public class HomeController {
 			productList.setProductId(shoppingCartList.getProductId());
 			productList.setProductName(shoppingCartList.getProductName());
 			productList.setProductStatus(Productstatus.SHIPPED);
+			productList.setShoppingcartId(shoppingCartList.getShoppingcartId());
 			lists.add(productList);
 		}
 		productCheckout.setProductList(lists);
@@ -252,11 +377,84 @@ public class HomeController {
 	}
 	
 	private List<Product> getProductList(){
+		 List<Product> results = null;
 		 final String restURI = "http://52.207.22.180:8765/products/";		
 		 RestTemplate restTemplate = new RestTemplate();
-		 List<Product> results = restTemplate.getForObject(restURI, List.class);
-		 if(results != null)
-			 return results;
+		 try{
+			/* AuthTokenInfo tokenInfo = sendTokenRequest();
+			 Assert.notNull(tokenInfo, "Authenticate first please......");
+		     HttpEntity<String> request = new HttpEntity<String>(getHeaders());
+		     ResponseEntity<Map> responseEntity = restTemplate.exchange(restURI+EcomConstants.QPM_ACCESS_TOKEN+tokenInfo.getAccess_token(),
+		        		HttpMethod.GET, request, Map.class);*/
+		     ResponseEntity<Map> responseEntity = restTemplate.getForEntity(restURI, Map.class);
+			 if(responseEntity.getStatusCode().equals(HttpStatus.OK)){
+				 Map productDetails = (Map) responseEntity.getBody();
+				 if(productDetails.get("ErrorMsg") != null){
+					 return null; 
+				 }else{
+					 results = (List<Product>) productDetails.get("productDetails");
+					 if(results != null)
+						 return results;
+				 }
+			 }
+		 }catch(HttpClientErrorException ex){
+			logger.error("ProductList==>"+ex.getMessage());
+			if(ex.getStatusCode().equals(HttpStatus.UNAUTHORIZED)){
+				unauthorizedClient();
+			}
+		 }
 		 return null;
 	}
+	
+	/** Prepare HTTP Headers.**/
+     
+    private static HttpHeaders getHeaders(){
+    	HttpHeaders headers = new HttpHeaders();
+    	headers.setAccept(Arrays.asList(MediaType.APPLICATION_JSON));
+    	return headers;
+    }
+    
+    
+     /** Send a POST request [on /oauth/token] to get an access-token, which will then be send with each request.**/
+     
+    @SuppressWarnings({ "unchecked"})
+	private static AuthTokenInfo sendTokenRequest(){
+        RestTemplate restTemplate = new RestTemplate(); 
+        
+        HttpEntity<String> request = new HttpEntity<String>(getHeadersWithClientCredentials());
+        ResponseEntity<Object> response = restTemplate.exchange(EcomConstants.AUTH_SERVER_URI+EcomConstants.QPM_PASSWORD_GRANT, HttpMethod.POST, request, Object.class);
+        LinkedHashMap<String, Object> map = (LinkedHashMap<String, Object>)response.getBody();
+        AuthTokenInfo tokenInfo = null;
+        
+        if(map!=null){
+        	tokenInfo = new AuthTokenInfo();
+        	tokenInfo.setAccess_token((String)map.get("access_token"));
+        	tokenInfo.setToken_type((String)map.get("token_type"));
+        	tokenInfo.setRefresh_token((String)map.get("refresh_token"));
+        	tokenInfo.setExpires_in((Integer)map.get("expires_in"));
+        	tokenInfo.setScope((String)map.get("scope"));
+        }else{
+            System.out.println("No user exist----------");
+            
+        }
+        return tokenInfo;
+    }
+    
+    
+     /** Add HTTP Authorization header, using Basic-Authentication to send client-credentials.**/
+     
+    private static HttpHeaders getHeadersWithClientCredentials(){
+    	String plainClientCredentials="my-trusted-client:secret";
+    	String base64ClientCredentials = new String(Base64.encodeBase64(plainClientCredentials.getBytes()));
+    	
+    	HttpHeaders headers = getHeaders();
+    	headers.add("Authorization", "Basic " + base64ClientCredentials);
+    	return headers;
+    } 
+    
+	private ModelAndView unauthorizedClient() {
+		 ModelAndView  modelAndView=new ModelAndView("unauthorized");
+	     return modelAndView;	
+	}
+    
 }

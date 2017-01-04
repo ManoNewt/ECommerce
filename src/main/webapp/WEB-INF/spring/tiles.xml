@@ -41,9 +41,9 @@
         <put-attribute name="title" value="Ecommerce :: Proceed To Pay"></put-attribute>
         <put-attribute name="content" value="/WEB-INF/views/ProceedToPay.jsp"></put-attribute>
     </definition>
-     <definition name="orderCreated" extends="ecommerce.base.definition">
+    <definition name="unauthorized" extends="ecommerce.base.definition">
        <put-attribute name="header" value="/WEB-INF/views/common/LoginHeader.jsp"></put-attribute>
         <put-attribute name="title" value="Ecommerce :: Order Created"></put-attribute>
-        <put-attribute name="content" value="/WEB-INF/views/orderCreated.jsp"></put-attribute>
+        <put-attribute name="content" value="/WEB-INF/views/common/UnauthorizedPage.jsp"></put-attribute>
     </definition>
    </tiles-definitions>

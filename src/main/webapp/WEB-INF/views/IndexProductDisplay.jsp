@@ -18,6 +18,10 @@
 <tr>
 <td><font color='GRAY' size="10" ><div id="successMsg"><b>${successMsg}</b></div></font></td>
 </tr></table>
+<table  style="border:1px solid red;margin-left:240px" bgcolor=" # #fdedec"  id="success">
+<tr>
+<td><font color='GRAY' size="10" ><div id="errorMsg"><b>${errorMsg}</b></div></font></td>
+</tr></table>
     <div class="grid_12">
         <h1>Products</h1><br>
     </div>
